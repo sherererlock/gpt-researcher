@@ -11,6 +11,7 @@ import os
 from enum import Enum
 
 _SUPPORTED_PROVIDERS = {
+    "towerai",
     "openai",
     "anthropic",
     "azure_openai",
@@ -97,7 +98,10 @@ class GenericLLMProvider:
         self.verbose = verbose
     @classmethod
     def from_provider(cls, provider: str, chat_log: str | None = None, verbose: bool=True, **kwargs: Any):
-        if provider == "openai":
+        if provider == "towerai":
+            from gpt_researcher.llm_provider.towerai_provider import ChatTowerAI
+            llm = ChatTowerAI(**kwargs)
+        elif provider == "openai":
             _check_pkg("langchain_openai")
             from langchain_openai import ChatOpenAI
 

@@ -71,23 +71,21 @@ async def write_md_to_pdf(text: str, filename: str = "") -> str:
     file_path = f"outputs/{filename[:60]}.pdf"
 
     try:
-        # Resolve css path relative to this backend module to avoid
-        # dependency on the current working directory.
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        css_path = os.path.join(current_dir, "styles", "pdf_styles.css")
-        
-        # Preprocess image URLs for PDF compatibility
-        processed_text = _preprocess_images_for_pdf(text)
-        
-        # Set base_url to current directory for resolving any remaining relative paths
-        base_url = os.path.abspath(".")
-        from md2pdf.core import md2pdf
-        md2pdf(
-               file_path,
-               raw=processed_text,
-               css=css_path,
-               base_url=base_url,
-            )
+        import mistune
+        from fpdf import FPDF
+
+        html = mistune.html(text)
+
+        class PDF(FPDF):
+            def header(self):
+                pass
+
+        pdf = PDF()
+        pdf.add_page()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.set_font("Helvetica", size=11)
+        pdf.write_html(html)
+        pdf.output(file_path)
         print(f"Report written to {file_path}")
     except Exception as e:
         print(f"Error in converting Markdown to PDF: {e}")
