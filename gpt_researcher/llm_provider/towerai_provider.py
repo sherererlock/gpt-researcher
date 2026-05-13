@@ -31,12 +31,9 @@ _TOWERAI_SDK_PATH = os.environ.get(
 def _get_client():
     if _TOWERAI_SDK_PATH and _TOWERAI_SDK_PATH not in sys.path:
         sys.path.insert(0, _TOWERAI_SDK_PATH)
-    from towerai import TowerAIClient  # type: ignore[import]
+    from towerai import create_client  # type: ignore[import]
 
-    api_key = os.environ.get("TOWERAI_TOKEN", "")
-    auth_token = os.environ.get("TOWERAI_AUTH_TOKEN", "")
-    headers = {"X-lobe-chat-auth": auth_token} if auth_token else {}
-    return TowerAIClient(api_key=api_key, default_headers=headers or None)
+    return create_client()
 
 
 def _to_towerai_messages(messages: List[BaseMessage]) -> List[Dict[str, str]]:
@@ -62,16 +59,11 @@ def _to_towerai_messages(messages: List[BaseMessage]) -> List[Dict[str, str]]:
 class ChatTowerAI(BaseChatModel):
     """LangChain chat model backed by the TowerAI gateway."""
 
-    model: str = "gpt-4.1"
+    model: str = "gpt-5.5"
     temperature: Optional[float] = 0.7
 
     @model_validator(mode="after")
     def _validate(self) -> "ChatTowerAI":
-        if not os.environ.get("TOWERAI_TOKEN", ""):
-            raise ValueError(
-                "TOWERAI_TOKEN environment variable is not set. "
-                "Please set it to your TowerAI token."
-            )
         return self
 
     @property

@@ -74,6 +74,14 @@ async def write_md_to_pdf(text: str, filename: str = "") -> str:
         import mistune
         from fpdf import FPDF
 
+        # Find a CJK-capable font on Windows
+        _FONT_CANDIDATES = [
+            r"C:\Windows\Fonts\msyh.ttc",    # 微软雅黑
+            r"C:\Windows\Fonts\simhei.ttf",  # 黑体
+            r"C:\Windows\Fonts\simsun.ttc",  # 宋体
+        ]
+        cjk_font_path = next((p for p in _FONT_CANDIDATES if os.path.exists(p)), None)
+
         html = mistune.html(text)
 
         class PDF(FPDF):
@@ -83,7 +91,21 @@ async def write_md_to_pdf(text: str, filename: str = "") -> str:
         pdf = PDF()
         pdf.add_page()
         pdf.set_auto_page_break(auto=True, margin=15)
-        pdf.set_font("Helvetica", size=11)
+
+        if cjk_font_path:
+            bold_candidates = [
+                r"C:\Windows\Fonts\msyhbd.ttc",
+                r"C:\Windows\Fonts\simhei.ttf",
+            ]
+            bold_path = next((p for p in bold_candidates if os.path.exists(p)), cjk_font_path)
+            pdf.add_font("CJK", style="",   fname=cjk_font_path)
+            pdf.add_font("CJK", style="B",  fname=bold_path)
+            pdf.add_font("CJK", style="I",  fname=cjk_font_path)
+            pdf.add_font("CJK", style="BI", fname=bold_path)
+            pdf.set_font("CJK", size=11)
+        else:
+            pdf.set_font("Helvetica", size=11)
+
         pdf.write_html(html)
         pdf.output(file_path)
         print(f"Report written to {file_path}")
