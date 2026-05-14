@@ -33,30 +33,55 @@ async def write_text_to_md(text: str, filename: str = "") -> str:
     await write_to_file(file_path, text)
     return urllib.parse.quote(file_path)
 
-def _preprocess_images_for_pdf(text: str) -> str:
-    """Convert web image URLs to absolute file paths for PDF generation.
-    
-    Transforms /outputs/images/... URLs to absolute file:// paths that
-    weasyprint can resolve.
+def _flatten_table_cells(html: str) -> str:
+    """Strip nested tags inside <td> and <th> elements, keeping only text content.
+
+    fpdf2's write_html raises NotImplementedError for nested tags inside table
+    cells (e.g. <td><strong>text</strong></td>).  This flattens those cells to
+    plain text so the table renders without crashing.
     """
-    import re
-    
-    base_path = os.path.abspath(".")
-    
-    # Pattern to find markdown images with /outputs/ URLs
-    def replace_image_url(match):
-        alt_text = match.group(1)
-        url = match.group(2)
-        
-        # Convert /outputs/... to absolute path
-        if url.startswith("/outputs/"):
-            abs_path = os.path.join(base_path, url.lstrip("/"))
-            return f"![{alt_text}]({abs_path})"
-        return match.group(0)
-    
-    # Match ![alt text](/outputs/images/...)
-    pattern = r'!\[([^\]]*)\]\((/outputs/[^)]+)\)'
-    return re.sub(pattern, replace_image_url, text)
+    from html.parser import HTMLParser
+
+    class TableCellFlattener(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=False)
+            self.result = []
+            self._in_cell = 0   # nesting depth inside td/th
+            self._cell_tag = None
+
+        def handle_starttag(self, tag, attrs):
+            if tag in ("td", "th"):
+                self._in_cell += 1
+                self._cell_tag = tag
+                attr_str = "".join(f' {k}="{v}"' for k, v in attrs if v is not None)
+                self.result.append(f"<{tag}{attr_str}>")
+            elif self._in_cell:
+                pass  # swallow nested opening tags inside cells
+            else:
+                attr_str = "".join(f' {k}="{v}"' for k, v in attrs if v is not None)
+                self.result.append(f"<{tag}{attr_str}>")
+
+        def handle_endtag(self, tag):
+            if tag in ("td", "th") and self._in_cell:
+                self._in_cell -= 1
+                self.result.append(f"</{tag}>")
+            elif self._in_cell:
+                pass  # swallow nested closing tags inside cells
+            else:
+                self.result.append(f"</{tag}>")
+
+        def handle_data(self, data):
+            self.result.append(data)
+
+        def handle_entityref(self, name):
+            self.result.append(f"&{name};")
+
+        def handle_charref(self, name):
+            self.result.append(f"&#{name};")
+
+    flattener = TableCellFlattener()
+    flattener.feed(html)
+    return "".join(flattener.result)
 
 
 async def write_md_to_pdf(text: str, filename: str = "") -> str:
@@ -82,7 +107,7 @@ async def write_md_to_pdf(text: str, filename: str = "") -> str:
         ]
         cjk_font_path = next((p for p in _FONT_CANDIDATES if os.path.exists(p)), None)
 
-        html = mistune.html(text)
+        html = _flatten_table_cells(mistune.html(text))
 
         class PDF(FPDF):
             def header(self):
